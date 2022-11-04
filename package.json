@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "webpack",
+    "build-release": "webpack -c webpack.release.js",
     "start": "webpack serve --open"
   },
   "author": "varajala",
