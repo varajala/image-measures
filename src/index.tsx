@@ -2,8 +2,10 @@ import * as React from "react";
 import * as ReactDOM from "react-dom/client";
 
 enum DrawMode {
-    Reference,
-    Measure,
+    ReferenceStart,
+    ReferenceEnd,
+    MeasureStart,
+    MeasureEnd,
 }
 
 interface IPoint {
@@ -22,7 +24,7 @@ interface IContext {
     measureEnd: IPoint;
 }
 
-const context: IContext = {
+const emptyContext: IContext = {
     dc: null,
     imageWidth: 0,
     imageHeight: 0,
@@ -33,11 +35,22 @@ const context: IContext = {
     measureEnd: { x: 0, y: 0 },
 };
 
+
+function drawLine(context: CanvasRenderingContext2D, start: IPoint, end: IPoint, color: string) {
+        context.beginPath();
+        context.moveTo(start.x, start.y);
+        context.lineTo(end.x, end.y);
+        context.strokeStyle = color;
+        context.stroke();
+        context.closePath();
+}
+
 const Application: React.FunctionComponent = () => {
     const [canvasElement, setCanvasElement] = React.useState<HTMLCanvasElement | null>(null);
     const [filePickerElement, setFilePickerElement] = React.useState<HTMLInputElement | null>(null);
     const [selectedImage, setSelectedImage] = React.useState<HTMLImageElement | null>(null);
-    const [drawMode, setDrawMode] = React.useState<DrawMode>(DrawMode.Reference);
+    const [drawMode, setDrawMode] = React.useState<DrawMode>(DrawMode.ReferenceStart);
+    const [context, setContext] = React.useState<IContext>(emptyContext);
 
     React.useEffect(() => {
         const canvas: HTMLElement | undefined = document.getElementById("display");
@@ -59,33 +72,62 @@ const Application: React.FunctionComponent = () => {
 
         canvasElement.width = selectedImage.width;
         canvasElement.height = selectedImage.height;
+        canvasElement.style.width = `${selectedImage.width}px`;
+        canvasElement.style.height= `${selectedImage.height}px`;
         context.imageWidth = selectedImage.width;
         context.imageHeight = selectedImage.height;
 
         context.dc = canvasElement.getContext("2d");
         context.dc.drawImage(selectedImage, 0, 0);
         canvasElement.toDataURL("image/png");
-        canvasElement.addEventListener("click", startLine);
-    }, [selectedImage]);
+        canvasElement.addEventListener("click", handleClick);
+        return () => canvasElement.removeEventListener("click", handleClick);
+    }, [canvasElement, selectedImage]);
 
-    function startLine(event: MouseEvent) {
-        console.log(context);
-        context.dc.drawImage(selectedImage, 0, 0);
-        context.referenceStart = { x: event.x, y: event.y };
-        canvasElement.removeEventListener("click", startLine);
-        canvasElement.addEventListener("click", endLine);
-    }
+    React.useEffect(() => {
+        if (selectedImage === null || canvasElement === null) {
+            return;
+        }
 
-    function endLine(event: MouseEvent) {
-        console.log(context);
-        context.referenceEnd = { x: event.x, y: event.y };
-        context.dc.beginPath();
-        context.dc.moveTo(context.referenceStart.x, context.referenceStart.y);
-        context.dc.lineTo(event.x, event.y);
-        context.dc.stroke();
+        canvasElement.addEventListener("click", handleClick);
+        return () => canvasElement.removeEventListener("click", handleClick);
+    }, [canvasElement, selectedImage, drawMode, context]);
 
-        canvasElement.removeEventListener("click", endLine);
-        canvasElement.addEventListener("click", startLine);
+    function handleClick(event: MouseEvent) {
+        const rect = canvasElement.getBoundingClientRect();
+        switch (drawMode) {
+            case DrawMode.ReferenceStart: {
+                setContext({ ...context, referenceStart: { x: event.clientX - rect.left, y: event.clientY - rect.top } });
+                setDrawMode(DrawMode.ReferenceEnd);
+                break;
+            }
+
+            case DrawMode.MeasureStart: {
+                setContext({ ...context, measureStart: { x: event.clientX - rect.left, y: event.clientY - rect.top } });
+                setDrawMode(DrawMode.MeasureEnd);
+                break;
+            }
+
+            case DrawMode.ReferenceEnd: {
+                const newContext = { ...context, referenceEnd: { x: event.clientX - rect.left, y: event.clientY - rect.top } };
+                context.dc.drawImage(selectedImage, 0, 0);
+                drawLine(context.dc, newContext.referenceStart, newContext.referenceEnd, "blue");
+                drawLine(context.dc, newContext.measureStart, newContext.measureEnd, "red");
+                setContext(newContext);
+                setDrawMode(DrawMode.ReferenceStart);
+                break;
+            }
+
+            case DrawMode.MeasureEnd: {
+                const newContext = { ...context, measureEnd: { x: event.clientX - rect.left, y: event.clientY - rect.top } };
+                context.dc.drawImage(selectedImage, 0, 0);
+                drawLine(context.dc, newContext.referenceStart, newContext.referenceEnd, "blue");
+                drawLine(context.dc, newContext.measureStart, newContext.measureEnd, "red");
+                setContext(newContext);
+                setDrawMode(DrawMode.MeasureStart);
+                break;
+            }
+        }
     }
 
     function updateImageSelection() {
@@ -113,10 +155,10 @@ const Application: React.FunctionComponent = () => {
                 <button onClick={updateImageSelection}>Load</button>
             </div>
             <div hidden={hideDrawingInputs}>
-                <button onClick={() => setDrawMode(DrawMode.Reference)}>Reference</button>
-                <button onClick={() => setDrawMode(DrawMode.Measure)}>Measure</button>
+                <button onClick={() => setDrawMode(DrawMode.ReferenceStart)}>Reference</button>
+                <button onClick={() => setDrawMode(DrawMode.MeasureStart)}>Measure</button>
             </div>
-            <canvas id={"display"}></canvas>
+            <canvas id={"display"} style={{ margin: "0px", padding: "0px" }}></canvas>
         </div>
     );
 }
