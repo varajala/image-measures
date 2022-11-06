@@ -1,6 +1,12 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom/client";
 
+const zoomInKey = "+";
+const zoomOutKey = "-";
+
+const maxZoom = 10;
+const minZoom = 0.1;
+
 enum DrawMode {
     ReferenceStart,
     ReferenceEnd,
@@ -35,12 +41,12 @@ const emptyContext: IContext = {
 
 
 function drawLine(context: CanvasRenderingContext2D, start: IPoint, end: IPoint, color: string) {
-        context.beginPath();
-        context.moveTo(start.x, start.y);
-        context.lineTo(end.x, end.y);
-        context.strokeStyle = color;
-        context.stroke();
-        context.closePath();
+    context.beginPath();
+    context.moveTo(start.x, start.y);
+    context.lineTo(end.x, end.y);
+    context.strokeStyle = color;
+    context.stroke();
+    context.closePath();
 }
 
 function calculateLength(a: IPoint, b: IPoint): number {
@@ -96,7 +102,11 @@ const Application: React.FunctionComponent = () => {
         context.dc.drawImage(selectedImage, 0, 0);
         canvasElement.toDataURL("image/png");
         canvasElement.addEventListener("click", handleClick);
-        return () => canvasElement.removeEventListener("click", handleClick);
+        window.addEventListener("keypress", handleZoom)
+        return () => {
+            canvasElement.removeEventListener("click", handleClick);
+            window.removeEventListener("keypress", handleZoom);
+        };
     }, [canvasElement, selectedImage]);
 
     React.useEffect(() => {
@@ -105,8 +115,13 @@ const Application: React.FunctionComponent = () => {
         }
 
         canvasElement.addEventListener("click", handleClick);
-        return () => canvasElement.removeEventListener("click", handleClick);
+        window.addEventListener("keypress", handleZoom)
+        return () => {
+            canvasElement.removeEventListener("click", handleClick);
+            window.removeEventListener("keypress", handleZoom);
+        };
     }, [canvasElement, selectedImage, drawMode, context]);
+
 
     function updateMeasure() {
         const referenceLength = calculateLength(context.referenceStart, context.referenceEnd);
@@ -121,8 +136,28 @@ const Application: React.FunctionComponent = () => {
         setMeasureResult(measureLength * unitInPixels);
     }
 
+    function handleZoom(event: KeyboardEvent) {
+        switch (event.key) {
+            case zoomInKey:
+                context.dc.clearRect(0, 0, context.imageWidth * 2, context.imageHeight * 2);
+                context.dc.scale(1.1, 1.1);
+                context.dc.drawImage(selectedImage, 0, 0);
+                break;
+
+            case zoomOutKey:
+                context.dc.clearRect(0, 0, context.imageWidth * 2, context.imageHeight * 2);
+                context.dc.scale(0.9, 0.9);
+                context.dc.drawImage(selectedImage, 0, 0);
+                break;
+
+            default:
+                break;
+        }
+    }
+
     function handleClick(event: MouseEvent) {
         const rect = canvasElement.getBoundingClientRect();
+        console.log(event.clientX, event.clientY);
         switch (drawMode) {
             case DrawMode.ReferenceStart: {
                 setContext({ ...context, referenceStart: { x: event.clientX - rect.left, y: event.clientY - rect.top } });
